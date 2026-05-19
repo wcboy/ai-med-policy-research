@@ -17,6 +17,17 @@ Use this checklist to review AI-assisted medical and pharmaceutical policy resea
 - Missing or weak evidence is marked as a gap, not hidden in confident prose.
 - Data cleaning, filtering, or extraction choices are reproducible.
 
+## RAW Data Snapshot Gate
+
+- `01_inputs/raw_inventory.json` exists before `README_DATA.md` and lists every detected RAW root/input with stable `raw_id`, path, format, source type, detection method, and size/row hint.
+- `01_inputs/README_DATA.md` exists before any Agent analyzes, cleans, ingests, models, or replicates from raw data.
+- Every `raw_id` and path in `raw_inventory.json` appears in the RAW Data Coverage Matrix; `expected_raw_input_count` cannot be lowered to hide unreviewed raw inputs.
+- The snapshot covers every available RAW file, folder, table, sheet, database export, archive, or user-provided source, not only the columns or files the Agent already expects to use.
+- The RAW Data Coverage Matrix contains `raw_id`, `path`, `format`, `size_or_rows`, `coverage_status`, `inspection_method`, `tool_log_refs`, and `notes`.
+- Each raw source records schema/columns, sheet/table names, units, time/geography/entity coverage, candidate keys, linkage keys, label or outcome fields, missingness/abnormal-value risks, parser/encoding issues, and relationships to other sources where applicable.
+- Any raw input that is unreadable, too large, held out, or only partially inspected is marked explicitly and drives `ITERATE` unless the user accepts the limitation before analysis.
+- Large raw files were inspected with metadata/header/schema/sample/chunk/database methods rather than unbounded full in-memory reads.
+
 ## Structured Data and Database Governance
 
 - Structured data design is reverse-derived from the research question, expected claims, analytical grain, and output schema before analysis starts.
@@ -35,6 +46,16 @@ Use this checklist to review AI-assisted medical and pharmaceutical policy resea
 - The independent verifier receives the frozen method, raw inputs, and quality checklist, not hidden expected answers.
 - Held-out or already-cleaned artifacts are used only after the method is fixed, and only for review, comparison, or validation.
 
+## Source Identity Blinding
+
+- For paper-derived methodology intended for blind execution, paper title, authors, journal, DOI, URL, citation string, exact PDF filename, PMID/CNKI/Wanfang identifiers, and searchable title fragments are treated as held-out identity metadata.
+- Execution-facing artifacts use blinded source IDs such as `paper:P001`; real identity mapping is stored only in a restricted parent/reviewer artifact such as `00_contract/source_identity_registry.md`.
+- Exact identity scan terms are stored only in restricted `00_contract/source_identity_scan_terms.json`; `manifest.json` must not contain real title/DOI/URL/filename fragments.
+- `source_identity_registry.md` and `source_identity_scan_terms.json` are not included in execution Agent call order, subagent dispatch inputs, public methodology prompts, or `09_execution_package/`.
+- `06_review/source_identity_leakage_report.json` records a redacted leakage-scan result without revealing the forbidden terms.
+- Execution Agents are explicitly forbidden from web-searching or bibliographically locating the original paper before completing the method-driven analysis.
+- If source identity was exposed to an execution Agent, the exposure is recorded and blind independent replication is not claimed.
+
 ## Data Review Expectations
 
 - Data-review expectations were defined before inspecting paper conclusions, cleaned-data outputs, benchmark answers, or known result summaries.
@@ -46,8 +67,10 @@ Use this checklist to review AI-assisted medical and pharmaceutical policy resea
 ## PROSPEC Execution
 
 - The full method and each decomposed subtask have a PROSPEC packet: prospective expectations, research boundary, operating procedure, structured data protocol, parallel execution contract, evidence trace, and completion gate.
+- `04_workflow/prospec_tasks.json` contains one machine-readable packet for each required `execution_state.subtasks[].subtask_id`.
 - Subtasks marked parallelizable have explicit dependencies, read/write scopes, database access mode, forbidden held-out results, output contracts, merge rules, and parent-agent review gates.
 - Execution Agents or subagents receive the frozen method, PROSPEC packet, governed inputs, and quality checklist, not hidden expected answers.
+- Execution Agents or subagents do not receive source identity metadata when blind methodology execution is required.
 - Validation Agents inspect observed results only after the method and prospective expectations are frozen.
 - The parent Agent merges subtask outputs only after required subtask quality gates pass or after failed gates are explicitly recorded as gaps.
 
@@ -71,6 +94,7 @@ Use this checklist to review AI-assisted medical and pharmaceutical policy resea
 - The output records which files, APIs, databases, or local services were used.
 - Each tool call or database/file-parser access that supports a review decision has a stable `call_id` in `tool_call_log.jsonl`.
 - Failed tool calls, timeouts, or non-JSON responses are recorded instead of silently substituted.
+- A `通过` quality-review row never cites a failed, timed-out, resource-exhausted, non-JSON, partial, or skipped tool call as supporting evidence.
 - The Agent does not fabricate unavailable data or pretend to have verified unreachable sources.
 
 ## Evidence-Bound Quality Review
@@ -93,10 +117,13 @@ Use this checklist to review AI-assisted medical and pharmaceutical policy resea
 
 - `execution_state.json` exists and has the same `run_id` as `manifest.json`.
 - `current_state` is one of `INIT`, `METHOD_LOCKED`, `TASKS_LOCKED`, `EVIDENCE_COMPLETE`, `REVIEWED`, `ACCEPTED`, or `ITERATE`.
-- States are unlocked only after the required artifacts for that state exist.
+- States are unlocked only after the required artifacts for that state exist and `transition_log` records a valid transition path to the current state.
+- `REVIEWED` requires `quality_gate.review_allowed=true`; `ACCEPTED` requires `quality_gate.accept_allowed=true`.
+- If source-identity blinding is required, `manifest.source_identity_blinding` defines blinded IDs, restricted registry path, restricted scan-terms path, redacted leakage report, and external lookup ban; public artifacts pass leakage scan and public manifest fields do not expose identity terms.
 - Resource governance is explicit before execution: run-level resource policy plus per-subtask runtime, memory, large-file, and overflow rules.
+- If raw data is available or bound for execution, `METHOD_LOCKED` requires synchronized `01_inputs/raw_inventory.json` and frozen `01_inputs/README_DATA.md`; missing or incomplete RAW inventory/snapshot blocks downstream execution.
 - `METHOD_LOCKED` requires frozen method, frozen review expectations, frozen PROSPEC protocol, and frozen structured-data protocol when structured data is required.
-- `TASKS_LOCKED` requires every required subtask to define allowed inputs, forbidden inputs, output contract, database access mode, quality gate, merge contract, and resource limits.
+- `TASKS_LOCKED` requires every required subtask to define allowed inputs, forbidden inputs, output contract, database access mode, quality gate, merge contract, resource limits, and a matching PROSPEC packet.
 - `EVIDENCE_COMPLETE` requires every required subtask to have output refs, plus valid tool-log refs when tools or databases were used.
 - `REVIEWED` requires the evidence-bound quality review matrix.
 - `ACCEPTED` requires `08_output/minimum_acceptable_output.md` and no unresolved required `需迭代` or `无法独立验证` rows.
@@ -113,7 +140,7 @@ Use this checklist to review AI-assisted medical and pharmaceutical policy resea
 ## Artifact Protocol
 
 - Generated methodology files are stored under a declared output root and run folder.
-- `manifest.json` exists and indexes execution state, contract, inputs, structured data protocol, method, PROSPEC protocol, expectations, workflow, subagent dispatch, trace, review, iteration, and final output artifacts.
+- `manifest.json` exists and indexes execution state, contract, inputs, `README_DATA.md`, structured data protocol, method, PROSPEC protocol, expectations, workflow, subagent dispatch, trace, review, iteration, and final output artifacts.
 - The frozen methodology and frozen pre-result review expectations are identifiable.
 - The frozen structured-data protocol and PROSPEC execution protocol are identifiable when the task uses structured data or decomposed/parallel Agent execution.
 - File statuses are explicit: `draft`, `frozen`, `reviewed`, `superseded`, or `rejected`.
