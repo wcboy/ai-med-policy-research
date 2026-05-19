@@ -1,0 +1,4 @@
+interface:
+  display_name: "AI Med Policy Research"
+  short_description: "Guide validator-gated PROSPEC policy research."
+  default_prompt: "Use $ai-med-policy-research to decompose a medical policy research task into a PROSPEC-governed workflow with structured data/database protocol, execution-state control, evidence-bound quality review, and validator-gated completion."
